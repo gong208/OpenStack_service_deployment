@@ -21,6 +21,10 @@ This document records the process of installing the OpenStack service of the Yog
     - [Installation and configurations](#installation-and-configurations)
     - [Finalize installation¶](#finalize-installation-1)
     - [Verify operation](#verify-operation-2)
+  - [Compute service](#compute-service)
+    - [Prerequisite](#prerequisite-1)
+    - [Installation and configurations](#installation-and-configurations-1)
+    - [Finalize installation](#finalize-installation-2)
 
 # Environment
 
@@ -775,4 +779,300 @@ $ openstack --os-placement-api-version 1.6 trait list --sort-column name
 | COMPUTE_DEVICE_TAGGING                |
 | COMPUTE_NET_ATTACH_INTERFACE          |
 | ...                                   |
+```
+
+## Compute service
+### Prerequisite
+1. Create the databases:
+* Use the database access client to connect to the database server as the root user:
+* 
+```zsh
+# mysql
+```
+* Create the nova_api, nova, and nova_cell0 databases:
+
+```
+MariaDB [(none)]> CREATE DATABASE nova_api;
+MariaDB [(none)]> CREATE DATABASE nova;
+MariaDB [(none)]> CREATE DATABASE nova_cell0;
+```
+
+* Grant proper access to the databases, replace **NOVA_DBPASS** with a suitable password.
+
+``` \
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON nova_api.* TO 'nova'@'localhost' IDENTIFIED BY 'NOVA_DBPASS';
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON nova_api.* TO 'nova'@'%' IDENTIFIED BY 'NOVA_DBPASS';
+
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'localhost' IDENTIFIED BY 'NOVA_DBPASS';
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'%' IDENTIFIED BY 'NOVA_DBPASS';
+
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON nova_cell0.* TO 'nova'@'localhost' IDENTIFIED BY 'NOVA_DBPASS';
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON nova_cell0.* TO 'nova'@'%' IDENTIFIED BY 'NOVA_DBPASS';
+```
+
+* Exit the database access client.
+
+2. Create user, service entity, and endpoints for nova.
+* Source the admin credentials to gain access to admin-only CLI commands:
+
+```zsh
+$ . admin-openrc
+```
+
+* Create the nova user:
+
+```zsh
+$ openstack user create --domain default --password-prompt nova
+
+User Password:
+Repeat User Password:
++---------------------+----------------------------------+
+| Field               | Value                            |
++---------------------+----------------------------------+
+| domain_id           | default                          |
+| enabled             | True                             |
+| id                  | 8a7dbf5279404537b1c7b86c033620fe |
+| name                | nova                             |
+| options             | {}                               |
+| password_expires_at | None                             |
++---------------------+----------------------------------+
+```
+
+* Add the admin role to the nova user:
+
+```zsh
+$ openstack role add --project service --user nova admin
+```
+
+* Create the nova service entity:
+
+```zsh
+$ openstack service create --name nova --description "OpenStack Compute" compute
+
++-------------+----------------------------------+
+| Field       | Value                            |
++-------------+----------------------------------+
+| description | OpenStack Compute                |
+| enabled     | True                             |
+| id          | 060d59eac51b4594815603d75a00aba2 |
+| name        | nova                             |
+| type        | compute                          |
++-------------+----------------------------------+
+```
+
+* Create the Compute API service endpoints:
+
+```zsh
+$ openstack endpoint create --region RegionOne compute public http://controller:8774/v2.1
+
++--------------+-------------------------------------------+
+| Field        | Value                                     |
++--------------+-------------------------------------------+
+| enabled      | True                                      |
+| id           | 3c1caa473bfe4390a11e7177894bcc7b          |
+| interface    | public                                    |
+| region       | RegionOne                                 |
+| region_id    | RegionOne                                 |
+| service_id   | 060d59eac51b4594815603d75a00aba2          |
+| service_name | nova                                      |
+| service_type | compute                                   |
+| url          | http://controller:8774/v2.1               |
++--------------+-------------------------------------------+
+
+$ openstack endpoint create --region RegionOne \
+  compute internal http://controller:8774/v2.1
+
++--------------+-------------------------------------------+
+| Field        | Value                                     |
++--------------+-------------------------------------------+
+| enabled      | True                                      |
+| id           | e3c918de680746a586eac1f2d9bc10ab          |
+| interface    | internal                                  |
+| region       | RegionOne                                 |
+| region_id    | RegionOne                                 |
+| service_id   | 060d59eac51b4594815603d75a00aba2          |
+| service_name | nova                                      |
+| service_type | compute                                   |
+| url          | http://controller:8774/v2.1               |
++--------------+-------------------------------------------+
+
+$ openstack endpoint create --region RegionOne \
+  compute admin http://controller:8774/v2.1
+
++--------------+-------------------------------------------+
+| Field        | Value                                     |
++--------------+-------------------------------------------+
+| enabled      | True                                      |
+| id           | 38f7af91666a47cfb97b4dc790b94424          |
+| interface    | admin                                     |
+| region       | RegionOne                                 |
+| region_id    | RegionOne                                 |
+| service_id   | 060d59eac51b4594815603d75a00aba2          |
+| service_name | nova                                      |
+| service_type | compute                                   |
+| url          | http://controller:8774/v2.1               |
++--------------+-------------------------------------------+
+```
+
+### Installation and configurations
+1. Install the packages:
+
+```zsh
+# apt install nova-api nova-conductor nova-novncproxy nova-scheduler
+```
+
+2. Edit the `/etc/nova/nova.conf` file and complete the following actions:
+* In the `[api_database]` and `[database]` sections, configure database access:
+
+```
+[api_database]
+# ...
+connection = mysql+pymysql://nova:NOVA_DBPASS@controller/nova_api
+
+[database]
+# ...
+connection = mysql+pymysql://nova:NOVA_DBPASS@controller/nova
+Replace NOVA_DBPASS with the password you chose for the Compute databases.
+```
+
+* In the `[DEFAULT]` section, configure RabbitMQ message queue access, replace **RABBIT_PASS** with the password you chose for the openstack account in RabbitMQ.
+
+```
+[DEFAULT]
+# ...
+transport_url = rabbit://openstack:RABBIT_PASS@controller:5672/
+```
+
+* In the `[api]` and `[keystone_authtoken]` sections, configure Identity service access, replace **NOVA_PASS** with the password you chose for the nova user in the Identity service, comment out or remove any other options in the `[keystone_authtoken]` section.
+
+```
+[api]
+# ...
+auth_strategy = keystone
+
+[keystone_authtoken]
+# ...
+www_authenticate_uri = http://controller:5000/
+auth_url = http://controller:5000/
+memcached_servers = controller:11211
+auth_type = password
+project_domain_name = Default
+user_domain_name = Default
+project_name = service
+username = nova
+password = NOVA_PASS
+```
+
+* In the `[service_user]` section, configure service user tokens, replace **NOVA_PASS** with the password you chose for the nova user in the Identity service.
+
+```
+[service_user]
+send_service_user_token = true
+auth_url = https://controller/identity
+auth_strategy = keystone
+auth_type = password
+project_domain_name = Default
+project_name = service
+user_domain_name = Default
+username = nova
+password = NOVA_PASS
+```
+
+* In the `[DEFAULT]` section, configure the my_ip option to use the **management interface IP** address of the controller node:
+
+```
+[DEFAULT]
+# ...
+my_ip =MANAGEMENT_IP_ADDRESS
+```
+
+* Configure the `[neutron]` section of `/etc/nova/nova.conf`. Refer to the [Networking service install guide](https://docs.openstack.org/neutron/yoga/install/controller-install-ubuntu.html#configure-the-compute-service-to-use-the-networking-service) for more information.
+
+* In the `[vnc]` section, configure the VNC proxy to use the **management interface IP address** of the controller node:
+
+```
+[vnc]
+enabled = true
+# ...
+server_listen = $my_ip
+server_proxyclient_address = $my_ip
+```
+
+* In the `[glance]` section, configure the location of the Image service API:
+
+```
+[glance]
+# ...
+api_servers = http://controller:9292
+```
+
+* In the [oslo_concurrency] section, configure the lock path:
+
+```
+[oslo_concurrency]
+# ...
+lock_path = /var/lib/nova/tmp
+```
+
+* **Due to a packaging bug, remove the log_dir option from the `[DEFAULT]` section.**
+
+* In the `[placement]` section, configure access to the Placement service, replace **PLACEMENT_PASS** with the password you choose for the placement service user created when installing Placement. Comment out or remove any other options in the `[placement]` section.
+
+```
+[placement]
+# ...
+region_name = RegionOne
+project_domain_name = Default
+project_name = service
+auth_type = password
+user_domain_name = Default
+auth_url = http://controller:5000/v3
+username = placement
+password = PLACEMENT_PASS
+```
+
+* Populate the nova-api database:
+
+```zsh
+# su -s /bin/sh -c "nova-manage api_db sync" nova
+```
+
+* Register the cell0 database:
+
+```zsh
+# su -s /bin/sh -c "nova-manage cell_v2 map_cell0" nova
+```
+
+* Create the cell1 cell:
+
+```zsh
+# su -s /bin/sh -c "nova-manage cell_v2 create_cell --name=cell1 --verbose" nova
+```
+
+* Populate the nova database:
+
+```zsh
+# su -s /bin/sh -c "nova-manage db sync" nova
+```
+
+* Verify nova cell0 and cell1 are registered correctly:
+
+```
+# su -s /bin/sh -c "nova-manage cell_v2 list_cells" nova
++-------+--------------------------------------+----------------------------------------------------+--------------------------------------------------------------+----------+
+|  Name |                 UUID                 |                   Transport URL                    |                     Database Connection                      | Disabled |
++-------+--------------------------------------+----------------------------------------------------+--------------------------------------------------------------+----------+
+| cell0 | 00000000-0000-0000-0000-000000000000 |                       none:/                       | mysql+pymysql://nova:****@controller/nova_cell0?charset=utf8 |  False   |
+| cell1 | f690f4fd-2bc5-4f15-8145-db561a7b9d3d | rabbit://openstack:****@controller:5672/nova_cell1 | mysql+pymysql://nova:****@controller/nova_cell1?charset=utf8 |  False   |
++-------+--------------------------------------+----------------------------------------------------+--------------------------------------------------------------+----------+
+```
+
+### Finalize installation
+1. Restart the Compute services:
+
+```zsh
+# service nova-api restart
+# service nova-scheduler restart
+# service nova-conductor restart
+# service nova-novncproxy restart
 ```
