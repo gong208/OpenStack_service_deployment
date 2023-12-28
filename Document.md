@@ -11,6 +11,7 @@ This document records the process of installing the OpenStack service of the Yog
     - [Prerequisite](#prerequisite)
     - [Install and configure components](#install-and-configure-components)
     - [Create a domain, project, and user](#create-a-domain-project-and-user)
+    - [Creating scripts and using scripts](#creating-scripts-and-using-scripts)
     - [Verify operation](#verify-operation)
   - [Image service](#image-service)
     - [Prerequisites](#prerequisites)
@@ -364,6 +365,57 @@ $ openstack role create myrole
 ```zsh
 $ openstack role add --project myproject --user myuser myrole
 ```
+
+### Creating scripts and using scripts
+1. Creating the scripts¶
+* Create client environment scripts for the admin and demo projects and users. Future portions of this guide reference these scripts to load appropriate credentials for client operations.
+* Create and edit the `admin-openrc` file and add the following content, replace ADMIN_PASS with the password you chose for the admin user in the Identity service.
+```
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=ADMIN_PASS
+export OS_AUTH_URL=http://controller:5000/v3
+export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
+```
+
+* Create and edit the `demo-openrc` file and add the following content, replace DEMO_PASS with the password you chose for the demo user in the Identity service.
+```
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=myproject
+export OS_USERNAME=myuser
+export OS_PASSWORD=DEMO_PASS
+export OS_AUTH_URL=http://controller:5000/v3
+export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
+```
+2. Using the script
+* To run clients as a specific project and user, you can simply load the associated client environment script prior to running them. For example:
+* Load the admin-openrc file to populate environment variables with the location of the Identity service and the admin project and user credentials:
+```
+$ . admin-openrc
+```
+
+* Request an authentication token:
+```zsh
+$ openstack token issue
+
++------------+-----------------------------------------------------------------+
+| Field      | Value                                                           |
++------------+-----------------------------------------------------------------+
+| expires    | 2016-02-12T20:44:35.659723Z                                     |
+| id         | gAAAAABWvjYj-Zjfg8WXFaQnUd1DMYTBVrKw4h3fIagi5NoEmh21U72SrRv2trl |
+|            | JWFYhLi2_uPR31Igf6A8mH2Rw9kv_bxNo1jbLNPLGzW_u5FC7InFqx0yYtTwa1e |
+|            | eq2b0f6-18KZyQhs7F3teAta143kJEWuNEYET-y7u29y0be1_64KYkM7E       |
+| project_id | 343d245e850143a096806dfaefa9afdc                                |
+| user_id    | ac3377633149401296f6c0d92d79dc16                                |
++------------+-----------------------------------------------------------------+
+```
+
+
 ### Verify operation
 1. Unset the temporary OS_AUTH_URL and OS_PASSWORD environment variable:
 ```zsh
