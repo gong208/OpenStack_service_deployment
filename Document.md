@@ -500,8 +500,10 @@ Repeat User Password:
 | options             | {}                               |
 | password_expires_at | None                             |
 +---------------------+----------------------------------+
-Add the admin role to the glance user and service project:
+```
 
+* Add the admin role to the glance user and service project:
+```zsh
 $ openstack role add --project service --user glance admin
 ```
 
