@@ -613,8 +613,10 @@ Comment out or remove any other options in the [keystone_authtoken] section.
 stores = file,http
 default_store = file
 filesystem_store_datadir = /var/lib/glance/images/
-In the [oslo_limit] section, configure access to keystone:
+```
+* In the [oslo_limit] section, configure access to keystone:
 
+```
 [oslo_limit]
 auth_url = http://controller:5000
 auth_type = password
