@@ -10,6 +10,7 @@ This document records the process of installing the OpenStack service of the Yog
   - [Identity service](#identity-service)
     - [Prerequisite](#prerequisite)
     - [Install and configure components](#install-and-configure-components)
+    - [Create a domain, project, and user](#create-a-domain-project-and-user)
     - [Verify operation](#verify-operation)
   - [Image service](#image-service)
     - [Prerequisites](#prerequisites)
@@ -146,7 +147,7 @@ $ ip address
 
 2. Edit the /etc/default/etcd file and set the ETCD_INITIAL_CLUSTER, ETCD_INITIAL_ADVERTISE_PEER_URLS, ETCD_ADVERTISE_CLIENT_URLS, ETCD_LISTEN_CLIENT_URLS to **the management IP address of the controller node** to enable access by other nodes via the management network:
 
-``` \
+```
 ETCD_NAME="controller"
 ETCD_DATA_DIR="/var/lib/etcd"
 ETCD_INITIAL_CLUSTER_STATE="new"
@@ -187,7 +188,7 @@ MariaDB [(none)]> CREATE DATABASE keystone;
 
 3. Grant proper access to the keystone database, **replace KEYSTONE_DBPASS** with a suitable password:
 
-``` \
+```
 MariaDB [(none)]> GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY 'KEYSTONE_DBPASS';
 MariaDB [(none)]> GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY 'KEYSTONE_DBPASS';
 ```
@@ -268,13 +269,108 @@ export OS_IDENTITY_API_VERSION=3
 ```
 
 These values shown here are the default ones created from keystone-manage bootstrap. For convenience, running the commands in a script file is recommended. 
+
+### Create a domain, project, and user
+1. Although the “default” domain already exists from the keystone-manage bootstrap step in this guide, a formal way to create a new domain would be:
+
+```zsh
+$ openstack domain create --description "An Example Domain" example
++-------------+----------------------------------+
+| Field       | Value                            |
++-------------+----------------------------------+
+| description | An Example Domain                |
+| enabled     | True                             |
+| id          | 2f4f80574fd84fe6ba9067228ae0a50c |
+| name        | example                          |
+| tags        | []                               |
++-------------+----------------------------------+
+```
+
+2. This guide uses a service project that contains a unique user for each service that you add to your environment. Create the service project:
+
+``` zsh
+$ openstack project create --domain default --description "Service Project" service
+
++-------------+----------------------------------+
+| Field       | Value                            |
++-------------+----------------------------------+
+| description | Service Project                  |
+| domain_id   | default                          |
+| enabled     | True                             |
+| id          | 24ac7f19cd944f4cba1d77469b2a73ed |
+| is_domain   | False                            |
+| name        | service                          |
+| parent_id   | default                          |
+| tags        | []                               |
++-------------+----------------------------------+
+```
+
+3. Regular (non-admin) tasks should use an unprivileged project and user. As an example, this guide creates the myproject project and myuser user.
+
+Create the myproject project:
+
+```zsh
+$ openstack project create --domain default --description "Demo Project" myproject
+
++-------------+----------------------------------+
+| Field       | Value                            |
++-------------+----------------------------------+
+| description | Demo Project                     |
+| domain_id   | default                          |
+| enabled     | True                             |
+| id          | 231ad6e7ebba47d6a1e57e1cc07ae446 |
+| is_domain   | False                            |
+| name        | myproject                        |
+| parent_id   | default                          |
+| tags        | []                               |
++-------------+----------------------------------+
+```
+
+4. Create the myuser user:
+
+```zsh
+$ openstack user create --domain default --password-prompt myuser
+
+User Password:
+Repeat User Password:
++---------------------+----------------------------------+
+| Field               | Value                            |
++---------------------+----------------------------------+
+| domain_id           | default                          |
+| enabled             | True                             |
+| id                  | aeda23aa78f44e859900e22c24817832 |
+| name                | myuser                           |
+| options             | {}                               |
+| password_expires_at | None                             |
++---------------------+----------------------------------+
+```
+
+5. Create the myrole role:
+
+```zsh
+$ openstack role create myrole
+
++-----------+----------------------------------+
+| Field     | Value                            |
++-----------+----------------------------------+
+| domain_id | None                             |
+| id        | 997ce8d05fc143ac97d83fdfb5998552 |
+| name      | myrole                           |
++-----------+----------------------------------+
+```
+
+6. Add the myrole role to the myproject project and myuser user:
+
+```zsh
+$ openstack role add --project myproject --user myuser myrole
+```
 ### Verify operation
 1. Unset the temporary OS_AUTH_URL and OS_PASSWORD environment variable:
 ```zsh
 $ unset OS_AUTH_URL OS_PASSWORD
 ```
 
-2. As the admin user, request an authentication token:
+1. As the admin user, request an authentication token:
 ```zsh
 $ openstack --os-auth-url http://controller:5000/v3 --os-project-domain-name Default --os-user-domain-name Default --os-project-name admin --os-username admin token issue
 Password:
@@ -291,7 +387,7 @@ Password:
 ```
 This command uses the password for the admin user.
 
-3. As the myuser user created in the previous, request an authentication token:
+1. As the myuser user created in the previous, request an authentication token:
 ```zsh
 $ openstack --os-auth-url http://controller:5000/v3 --os-project-domain-name Default --os-user-domain-name Default --os-project-name myproject --os-username myuser token issue
 
