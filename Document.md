@@ -634,14 +634,8 @@ As for the `[oslo_limit]` section, use the username and password assigned to gla
 
 ```zsh
 $ openstack role add --user MY_SERVICE --user-domain Default --system all reader
+```
 See the oslo_limit docs for more information about configuring the unified limits client.
-```
-* In the [DEFAULT] section, optionally enable per-tenant quotas:
-```
-[DEFAULT]
-use_keystone_quotas = True
-Note that you must have created the registered limits as described above if this is enabled.
-```
 
 1. Populate the Image service database:
 ```zsh
